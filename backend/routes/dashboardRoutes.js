@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../config/db");
 const authMiddleware = require("../middleware/authMiddleware");
+const { getFinancialSummary, generateFallbackInsight } = require("../services/insightsEngine");
 
 // ==============================
 // 💰 FINANCE OVERVIEW
@@ -71,26 +72,16 @@ router.get("/categories", authMiddleware, async (req, res) => {
 router.get("/insights", authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
-
-    const result = await pool.query(
-      `SELECT category, SUM(amount) AS total
-       FROM transactions
-       WHERE user_id = $1 AND type = 'expense'
-       GROUP BY category
-       ORDER BY total DESC
-       LIMIT 1`,
-      [userId]
-    );
-
-    const top = result.rows[0];
-
-    const message = top
-      ? `You are spending most on ${top.category}.`
-      : "No insights available";
+    const summary = await getFinancialSummary(userId);
+    const insightText = generateFallbackInsight(summary);
 
     res.json({
       success: true,
-      data: message,
+      data: {
+        insight: insightText,
+        source: "fallback",
+        summary,
+      },
     });
 
   } catch (error) {
