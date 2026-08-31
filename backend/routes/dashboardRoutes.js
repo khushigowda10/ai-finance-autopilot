@@ -13,11 +13,11 @@ router.get("/finance-overview", authMiddleware, async (req, res) => {
 
     const result = await pool.query(
       `SELECT 
-        COALESCE(SUM(CASE WHEN type = 'income' THEN amount END), 0) AS total_income,
-        COALESCE(SUM(CASE WHEN type = 'expense' THEN amount END), 0) AS total_expense
+        COALESCE(SUM(CASE WHEN type = 'income' THEN ABS(amount) END), 0) AS total_income,
+        COALESCE(SUM(CASE WHEN type = 'expense' THEN ABS(amount) END), 0) AS total_expense
        FROM transactions
        WHERE user_id = $1`,
-      [userId]
+       [userId]
     );
 
     const totalIncome = Number(result.rows[0].total_income || 0);
@@ -47,7 +47,7 @@ router.get("/categories", authMiddleware, async (req, res) => {
     const userId = req.user.id;
 
     const result = await pool.query(
-      `SELECT category, SUM(amount) AS total
+      `SELECT category, SUM(ABS(amount)) AS total
        FROM transactions
        WHERE user_id = $1 AND type = 'expense'
        GROUP BY category`,
@@ -114,8 +114,8 @@ router.get("/monthly", authMiddleware, async (req, res) => {
     const result = await pool.query(
       `SELECT 
         TO_CHAR(date, 'Mon') as month,
-        SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as income,
-        SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as expense
+        SUM(CASE WHEN type = 'income' THEN ABS(amount) ELSE 0 END) as income,
+        SUM(CASE WHEN type = 'expense' THEN ABS(amount) ELSE 0 END) as expense
        FROM transactions
        WHERE user_id = $1
        GROUP BY month, DATE_TRUNC('month', date)
