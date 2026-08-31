@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../config/db");
 const authMiddleware = require("../middleware/authMiddleware");
-const { getFinancialSummary, generateFallbackInsight } = require("../services/insightsEngine");
+const { getFinancialSummary, generateFallbackInsight, getAiInsight } = require("../services/insightsEngine");
 
 // ==============================
 // 💰 FINANCE OVERVIEW
@@ -67,22 +67,35 @@ router.get("/categories", authMiddleware, async (req, res) => {
 
 
 // ==============================
-// 🤖 AI INSIGHTS
+// 🤖 AI INSIGHTS (real AI, with rule-based fallback)
 // ==============================
 router.get("/insights", authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
     const summary = await getFinancialSummary(userId);
-    const insightText = generateFallbackInsight(summary);
 
-    res.json({
-      success: true,
-      data: {
-        insight: insightText,
-        source: "fallback",
-        summary,
-      },
-    });
+    try {
+      const aiText = await getAiInsight(summary);
+      return res.json({
+        success: true,
+        data: {
+          insight: aiText,
+          source: "ai",
+          summary,
+        },
+      });
+    } catch (aiError) {
+      console.warn("AI INSIGHT FAILED, falling back:", aiError.message);
+      const fallbackText = generateFallbackInsight(summary);
+      return res.json({
+        success: true,
+        data: {
+          insight: fallbackText,
+          source: "fallback",
+          summary,
+        },
+      });
+    }
 
   } catch (error) {
     console.error("INSIGHT ERROR:", error);

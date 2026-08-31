@@ -1,8 +1,13 @@
 const pool = require("../config/db");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+
+const genAI = process.env.GEMINI_API_KEY
+  ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+  : null;
 
 // Gathers everything we know about a user's finances into one object.
 // This is the "structured financial summary" that both the rule-based
-// engine AND (in the next step) the AI will consume.
+// engine AND the AI consume.
 async function getFinancialSummary(userId) {
   const overview = await pool.query(
     `SELECT 
@@ -66,8 +71,7 @@ async function getFinancialSummary(userId) {
   };
 }
 
-// The existing deterministic logic, slightly extended. This stays as the
-// PERMANENT fallback — it must never depend on anything external.
+// PERMANENT fallback — deterministic, no external dependency, always works.
 function generateFallbackInsight(summary) {
   const lines = [];
 
@@ -91,4 +95,53 @@ function generateFallbackInsight(summary) {
   return lines.join(" ");
 }
 
-module.exports = { getFinancialSummary, generateFallbackInsight };
+// Builds a compact, structured prompt from the summary — no raw DB access,
+// no PII beyond what's needed (no email, no user id, no transaction descriptions).
+function buildPrompt(summary) {
+  return `You are a personal finance assistant. Based ONLY on the following summary, write a short, encouraging, and specific financial insight for the user (2-3 sentences, no markdown, no bullet points, plain text only).
+
+Financial summary:
+- Total income: ₹${summary.totalIncome}
+- Total expenses: ₹${summary.totalExpense}
+- Net savings: ₹${summary.netSavings}
+- Savings rate: ${(summary.savingsRate * 100).toFixed(1)}%
+- Top spending category: ${summary.topCategory || "none"} (₹${summary.topCategoryAmount})
+- Category breakdown: ${JSON.stringify(summary.categoryBreakdown)}
+- Categories over budget this month: ${summary.overspentCategories.join(", ") || "none"}
+- Categories near budget limit: ${summary.nearLimitCategories.join(", ") || "none"}
+
+Give one practical, actionable suggestion based on this data. Do not invent numbers not shown above.`;
+}
+
+// Calls Gemini with a timeout. Throws on any failure — caller handles fallback.
+async function getAiInsight(summary) {
+  if (!genAI) {
+    throw new Error("Gemini not configured (missing GEMINI_API_KEY)");
+  }
+
+  const model = genAI.getGenerativeModel({ model: "gemini-3.6-flash" });
+  const prompt = buildPrompt(summary);
+
+  const TIMEOUT_MS = 8000;
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error("Gemini request timed out")), TIMEOUT_MS)
+  );
+
+  const result = await Promise.race([
+    model.generateContent({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: {
+        thinkingConfig: { thinkingLevel: "minimal" },
+      },
+    }),
+    timeoutPromise,
+  ]);
+
+  const text = result.response.text().trim();
+  if (!text) {
+    throw new Error("Gemini returned empty response");
+  }
+  return text;
+}
+
+module.exports = { getFinancialSummary, generateFallbackInsight, getAiInsight };
