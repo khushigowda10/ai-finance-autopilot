@@ -300,6 +300,7 @@ const Dashboard = () => {
   const [finance, setFinance] = useState({});
   const [categories, setCategories] = useState([]);
   const [insight, setInsight] = useState("");
+  const [insightSource, setInsightSource] = useState("");
   const [monthlyData, setMonthlyData] = useState([]);
   const [budgetSummary, setBudgetSummary] = useState({});
 
@@ -324,7 +325,8 @@ const Dashboard = () => {
       ]);
 
       setFinance(financeRes.data.data || {});
-      setInsight(insightRes.data.data || "");
+      setInsight(insightRes.data.data?.insight || "");
+      setInsightSource(insightRes.data.data?.source || "");
 
       const formatted = (categoryRes.data.data || [])
         .map((item) => ({
@@ -456,7 +458,20 @@ const Dashboard = () => {
 
         {/* AI INSIGHT */}
         <div className="mb-6 p-4 rounded-2xl bg-gray-900/60 border border-gray-800 backdrop-blur">
-          <p className="text-gray-400 text-sm mb-1">AI Insight</p>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-gray-400 text-sm">AI Insight</p>
+            {insightSource && (
+              <span
+                className={`text-xs px-2 py-0.5 rounded-full ${
+                  insightSource === "ai"
+                    ? "bg-green-900 text-green-400"
+                    : "bg-gray-800 text-gray-400"
+                }`}
+              >
+                {insightSource === "ai" ? "✨ AI" : "Rule-based"}
+              </span>
+            )}
+          </div>
           <p className="text-white text-sm sm:text-base">{insight}</p>
         </div>
 

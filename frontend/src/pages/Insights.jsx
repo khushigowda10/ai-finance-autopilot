@@ -247,7 +247,7 @@ const Insights = () => {
   const fetchData = async () => {
     try {
       const res = await API.get("/transactions");
-      setTransactions(res.data || []); // ✅ FIXED
+      setTransactions(res.data?.data || []); // ✅ FIXED
     } catch (err) {
       console.error(err);
     }
@@ -268,7 +268,7 @@ const Insights = () => {
   // ==============================
 
   const parseAmount = (val) =>
-    Number(String(val).replace(/[^0-9.-]+/g, "")) || 0;
+  Math.abs(Number(String(val).replace(/[^0-9.-]+/g, "")) || 0);
 
   const isIncome = (t) =>
     t.category?.toLowerCase() === "income";
