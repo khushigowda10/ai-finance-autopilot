@@ -60,7 +60,6 @@
 // });
 
 
-
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
@@ -70,6 +69,7 @@ const authRoutes = require("./routes/authRoutes");
 const transactionRoutes = require("./routes/transactionRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const budgetRoutes = require("./routes/budgetRoutes");
+const rateLimit = require("express-rate-limit");
 
 // config
 dotenv.config();
@@ -90,11 +90,44 @@ app.use(cors({
 app.use(express.json());
 
 // ==============================
+// RATE LIMITERS
+// ==============================
+
+// Strict: brute-force protection on auth endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 attempts per IP per window
+  message: {
+    success: false,
+    message: "Too many attempts. Please try again in 15 minutes.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Moderate: protects external AI API quota
+const aiLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // 10 requests per IP per minute
+  message: {
+    success: false,
+    message: "Too many insight requests. Please slow down.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// ==============================
 // ROUTES
 // ==============================
+app.use("/auth/login", authLimiter);
+app.use("/auth/signup", authLimiter);
 app.use("/auth", authRoutes);
-app.use("/transactions", transactionRoutes);
+
+app.use("/dashboard/insights", aiLimiter);
 app.use("/dashboard", dashboardRoutes);
+
+app.use("/transactions", transactionRoutes);
 app.use("/budgets", budgetRoutes);
 
 // root route
